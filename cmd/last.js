@@ -1,5 +1,10 @@
+// cmd/last.js
+const { getUserRank } = require("../handlers/handleCmd");
+const log = require('../logger');
+const config = require('../config.json');
+
 module.exports.config = {
-  name: "لاست",
+  name: "last",
   version: '1.0.0',
   credits: 'عمر',
   hasPermssion: 2,
@@ -10,17 +15,15 @@ module.exports.config = {
 };
 
 module.exports.handleReply = async function({ api, event, args, Threads, handleReply }) {
-
   if (parseInt(event.senderID) !== parseInt(handleReply.author)) return;
 
-  var arg = event.body.split(" ");
-  var idgr = handleReply.groupid[arg[1] - 1];
+  const arg = event.body.split(" ");
+  const idgr = handleReply.groupid[arg[1] - 1];
 
   switch (handleReply.type) {
-
     case "reply":
       {
-        if (arg[0] == "حظر" || arg[0] == "حظر") {
+        if (arg[0] === "حظر") {
           const data = (await Threads.getData(idgr)).data || {};
           data.banned = 1;
           await Threads.setData(idgr, { data });
@@ -30,46 +33,43 @@ module.exports.handleReply = async function({ api, event, args, Threads, handleR
           break;
         }
 
-        if (arg[0] == "خروج" || arg[0] == "غادري") {
+        if (arg[0] === "خروج" || arg[0] === "غادري") {
           api.removeUserFromGroup(`${api.getCurrentUserID()}`, idgr);
           api.sendMessage(`تم الخروج من المجموعة:\n${idgr}\n${(await Threads.getData(idgr)).name}`, event.threadID, event.messageID);
           break;
         }
-
       }
   }
 };
 
 module.exports.run = async function({ api, event, client }) {
 
-  // منع غير المطورين
-  if (event.senderID != "61579001370029") {
-    return api.sendMessage("مش لك يقلبي ☝🏿🐸", event.threadID, event.messageID);
+  // السماح فقط للمطور
+  if (parseInt(event.senderID) !== 61579001370029) {
+    return api.sendMessage("مش لك مقلبي", event.threadID, event.messageID);
   }
 
-  var inbox = await api.getThreadList(100, null, ['INBOX']);
-  let list = [...inbox].filter(group => group.isSubscribed && group.isGroup);
+  const inbox = await api.getThreadList(100, null, ['INBOX']);
+  const list = [...inbox].filter(group => group.isSubscribed && group.isGroup);
 
-  var listthread = [];
+  const listthread = [];
 
-  for (var groupInfo of list) {
-    let data = (await api.getThreadInfo(groupInfo.threadID));
-
+  for (const groupInfo of list) {
+    const data = await api.getThreadInfo(groupInfo.threadID);
     listthread.push({
       id: groupInfo.threadID,
       name: groupInfo.name,
       sotv: data.userInfo.length,
     });
-
   }
 
-  var listbox = listthread.sort((a, b) => b.sotv - a.sotv);
+  const listbox = listthread.sort((a, b) => b.sotv - a.sotv);
 
   let msg = "╭──〔 قائمة المجموعات 〕───\n";
   let i = 1;
+  const groupid = [];
 
-  var groupid = [];
-  for (var group of listbox) {
+  for (const group of listbox) {
     msg += `│\n│ ${i}. ${group.name}\n│ ID: ${group.id}\n│ الأعضاء: ${group.sotv}\n`;
     groupid.push(group.id);
     i++;
