@@ -1,4 +1,7 @@
-// slath.js - أوامر المطور الكاملة
+// cmd/slath.js - أوامر المطور الكاملة
+const { getUserRank } = require("../handlers/handleCmd");
+const log = require('../logger');
+const config = require('../config.json');
 const fs = require("fs");
 
 module.exports.config = {
@@ -54,12 +57,11 @@ module.exports.run = async ({ api, event }) => {
 };
 
 // التعامل مع الردود
-module.exports.handleReply = async ({ api, event, handleReply }) => {
+module.exports.handleReply = async ({ api, event, handleReply, args }) => {
   if (event.senderID != handleReply.author)
     return api.sendMessage("تحذير: هذا الأمر للمطور فقط.", event.threadID);
 
-  const args = event.body.trim().split(" ");
-  const choice = args[0];
+  const choice = event.body.trim().split(" ")[0];
 
   if (handleReply.type === "menu") {
     switch (choice) {
@@ -136,7 +138,7 @@ module.exports.handleReply = async ({ api, event, handleReply }) => {
     }
   }
 
-  // إرسال رسالة لجميع القروبات (بدون زخرفة)
+  // إرسال رسالة لجميع القروبات
   if (handleReply.type === "sendWord") {
     const allThread = await api.getThreadList(100, null, ["INBOX"]);
     const now = new Date();
