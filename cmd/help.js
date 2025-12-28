@@ -1,70 +1,64 @@
-const fs = require("fs-extra");
-const path = require("path");
+// cmd/help.js
+const { getUserRank } = require("../handlers/handleCmd");
+const log = require('../logger')
+const config = require('../config.json')
+const { styleText, styleNum } = require('../tools')
 
-module.exports.config = {
+module.exports = {
   name: "اوامر",
-  version: "1.1.4",
-  hasPermssion: 0,
-  credits: "انجالاتي",
-  description: "قائمة الاوامر",
-  commandCategory: "الاوامر",
-  usages: "[صفحة]",
-  cooldowns: 5
-};
+  otherName: ['help', 'أوامر'],
+  rank: 0,
+  cooldown: 0,
+  hide: false,
+  prefix: true,
+  description: 'يقوم بعرض الأوامر المتاحة',
+  usageCount: 0,
+  run: async (api, event, allCommands) => {
+    try {
+      const { senderID, threadID, messageID } = event;
+      const args = event.body.split(/\s+/).slice(1);
+      const userRank = getUserRank(senderID, config);
+      
+      const availableCommands = (allCommands || [])
+        .filter(cmd => cmd.rank <= userRank)
+        .filter(cmd => cmd.hide === false)
+        .filter(cmd => cmd.name !== 'اوامر');
+      
+      if (availableCommands.length === 0) {
+        return api.sendMessage(`${config.name}`, threadID, messageID);
+      }
+      
+      const itemsPerPage = 10;
+      const pageNumber = parseInt(args[0], 10) || 1;
+      const totalCommands = availableCommands.length;
+      const totalPages = Math.ceil(totalCommands / itemsPerPage);
+      
+      if (pageNumber > totalPages || pageNumber < 1) {
+        return api.sendMessage(`إجمالي عدد الصفحات ┇ ${totalPages}`, threadID, messageID);
+      }
+      
+      const startIndex = (pageNumber - 1) * itemsPerPage;
+      const endIndex = startIndex + itemsPerPage;
+      
+      const commandsList = availableCommands
+        .slice(startIndex, endIndex)
+        .map(cmd => `┇ ${cmd.name}`)
+        .join('\n');
+      
+      const messageText = `＿＿＿＿＿
+  ${styleText('قائمة الأوامر')}
+──────
+${commandsList}
 
-module.exports.run = async function({ api, event, args }) {
-  const { threadID, messageID } = event;
-  const commands = [...global.client.commands.values()];
-
-  const commandsPerPage = 6;
-  const page = parseInt(args[0]) || 1;
-  const totalPages = Math.ceil(commands.length / commandsPerPage);
-
-  if (page < 1 || page > totalPages) {
-    return api.sendMessage(
-      `الصفحة غير موجودة (1 - ${totalPages})`,
-      threadID,
-      messageID
-    );
-  }
-
-  const start = (page - 1) * commandsPerPage;
-  const pageCommands = commands.slice(start, start + commandsPerPage);
-
-  let message = `
-قائمة الاوامر
-────────
-
-`;
-
-  pageCommands.forEach(cmd => {
-    message += `${cmd.config.name}\n`;
-  });
-
-  message += `
-────────
-${page}/${totalPages}
-عدد الاوامر: ${commands.length}
-
-هياتو بوت
-`;
-
-  const imagePath = path.join(
-    process.cwd(),
-    "attached_assets",
-    "received_1354469396415619_1765356692054.jpeg"
-  );
-
-  try {
-    if (fs.existsSync(imagePath)) {
-      return api.sendMessage(
-        { body: message, attachment: fs.createReadStream(imagePath) },
-        threadID,
-        messageID
-      );
+.${styleText('عدد الأوامر')} : ${totalCommands}
+.${styleText('الصفحة')} ${styleNum(pageNumber)} من ${styleNum(totalPages)}
+──────
+بوت هياتو`;
+      
+      api.sendMessage(messageText, threadID, messageID);
+    } catch (err) {
+      log.error(err);
+      api.sendMessage('خطأ في ملف help.js', config.editor, null, true);
     }
-    return api.sendMessage(message, threadID, messageID);
-  } catch {
-    return api.sendMessage(message, threadID, messageID);
   }
 };
