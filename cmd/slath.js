@@ -1,207 +1,79 @@
-// cmd/slath.js - أوامر المطور الكاملة
-const { getUserRank } = require("../handlers/handleCmd");
+// cmd/slath.js
 const log = require('../logger');
 const config = require('../config.json');
 const fs = require("fs");
+const { styleText } = require('../tools'); // استخدام التولز التي ظهرت في كود هيلب
 
-module.exports.config = {
+module.exports = {
   name: "slath",
-  version: "4.6",
-  hasPermssion: 2,
-  credits: "محمد إدريس",
-  description: "أوامر المطور الكاملة: إرسال، ريد، تصفية، باند، عرض القروبات",
-  commandCategory: "المطور",
-  usages: "slath",
-  cooldowns: 5
-};
+  otherName: ['مطور'],
+  rank: 2, // رتبة المطور كما في كود هيلب
+  cooldown: 0,
+  hide: true,
+  prefix: true,
+  description: 'لوحة تحكم المطور',
+  
+  run: async (api, event) => {
+    const { senderID, threadID, messageID } = event;
+    const devID = "61579001370029"; // معرفك
 
-const devID = "61579001370029";
-const bannedUsers = [];
-const adminsFile = __dirname + "/admins.json";
+    // التحقق من الهوية
+    if (senderID !== devID) {
+      return api.sendMessage("❌ هذا الأمر مخصص للمطور الأساسي.", threadID, messageID);
+    }
 
-function getAdmins() {
-  if (!fs.existsSync(adminsFile)) return [];
-  return JSON.parse(fs.readFileSync(adminsFile));
-}
-function saveAdmins(admins) {
-  fs.writeFileSync(adminsFile, JSON.stringify(admins, null, 2));
-}
+    const menu = `╔═════════════〔 ${styleText('DEV MENU')} 〕═════════════╗\n\n` +
+                 `[1] إعادة تشغيل البوت\n` +
+                 `[2] إرسال رسالة لجميع القروبات\n` +
+                 `[3] تغيير كنيات الأعضاء\n` +
+                 `[4] تصفية المجموعة\n` +
+                 `[5] عرض المجموعات\n\n` +
+                 `╚═════════════════════════════════════════════╝\n` +
+                 `💡 قم بالرد على هذه الرسالة برقم الخيار.`;
 
-module.exports.run = async ({ api, event }) => {
-  if (event.senderID != devID)
-    return api.sendMessage("تحذير: هذا الأمر مخصص للمطور فقط.", event.threadID);
+    return api.sendMessage(menu, threadID, (err, info) => {
+      // هنا نستخدم منطق الربط إذا كان البوت يدعم Listeners
+      // إذا كان بوتك بسيطاً، ستحتاج لاستخدام args مباشرة بدلاً من Reply
+      // سأقوم بتعديل الكود ليعمل عبر الأوامر المباشرة (slath 1, slath 2 ..الخ)
+      
+      const args = event.body.split(/\s+/).slice(1);
+      const choice = args[0];
 
-  const menu = `
-╔═════════════〔 قائمة المطور 〕═════════════╗
+      switch (choice) {
+        case "1":
+          api.sendMessage("⏳ جاري إعادة التشغيل...", threadID, () => process.exit(1));
+          break;
 
-[1] إعادة تشغيل البوت
-[2] إرسال رسالة لجميع القروبات
-[3] تغيير كنيات الأعضاء
-[4] تصفية المجموعة من الأعضاء
-[5] حظر عضو من استخدام البوت
-[6] عرض القروبات وإضافة المطور
-
-╚═════════════════════════════════════════════╝
-أرسل رقم الأمر للتنفيذ.
-`;
-
-  api.sendMessage(menu, event.threadID, (err, info) => {
-    if (!global.client.handleReply) global.client.handleReply = [];
-    global.client.handleReply.push({
-      name: module.exports.config.name,
-      messageID: info.messageID,
-      author: event.senderID,
-      type: "menu"
-    });
-  });
-};
-
-// التعامل مع الردود
-module.exports.handleReply = async ({ api, event, handleReply, args }) => {
-  if (event.senderID != handleReply.author)
-    return api.sendMessage("تحذير: هذا الأمر للمطور فقط.", event.threadID);
-
-  const choice = event.body.trim().split(" ")[0];
-
-  if (handleReply.type === "menu") {
-    switch (choice) {
-      case "1":
-        api.sendMessage("جاري إعادة تشغيل البوت...", event.threadID, () => process.exit(1));
-        break;
-
-      case "2":
-        api.sendMessage("أرسل الآن الرسالة التي تريد إرسالها لجميع القروبات:", event.threadID, (err, info) => {
-          global.client.handleReply.push({
-            name: module.exports.config.name,
-            messageID: info.messageID,
-            author: event.senderID,
-            type: "sendWord"
+        case "2":
+          const broadcastMsg = args.slice(1).join(" ");
+          if (!broadcastMsg) return api.sendMessage("📝 اكتب الرسالة بعد الرقم: slath 2 [النص]", threadID);
+          
+          api.getThreadList(100, null, ["INBOX"], (err, list) => {
+            list.forEach(t => { if(t.isGroup) api.sendMessage(`📢 تعميم إداري:\n\n${broadcastMsg}`, t.threadID); });
+            api.sendMessage("✅ تم الإرسال للجميع.", threadID);
           });
-        });
-        break;
+          break;
 
-      case "3":
-        api.sendMessage("أرسل الصيغة الجديدة للكنية (اكتب كلمة الاسم ليتم استبدالها باسم العضو):", event.threadID, (err, info) => {
-          global.client.handleReply.push({
-            name: module.exports.config.name,
-            messageID: info.messageID,
-            author: event.senderID,
-            type: "setNick"
+        case "4":
+          api.getThreadInfo(threadID, (err, info) => {
+            api.sendMessage("🛑 بدأت التصفية...", threadID);
+            info.participantIDs.forEach(uid => {
+              if (uid !== devID && uid !== api.getCurrentUserID()) api.removeUserFromGroup(uid, threadID);
+            });
           });
-        });
-        break;
+          break;
 
-      case "4":
-        const infoThread = await api.getThreadInfo(event.threadID);
-        for (let uid of infoThread.participantIDs) {
-          if (uid != devID) {
-            try {
-              await api.removeUserFromGroup(uid, event.threadID);
-            } catch (e) {}
-          }
-        }
-        api.sendMessage("تم تصفية المجموعة من جميع الأعضاء ما عدا المطور.", event.threadID);
-        break;
-
-      case "5":
-        api.sendMessage("قم بالرد على رسالة العضو ليتم حظره من استخدام البوت.", event.threadID);
-        global.client.handleReply.push({
-          name: module.exports.config.name,
-          messageID: event.messageID,
-          author: event.senderID,
-          type: "banUser"
-        });
-        break;
-
-      case "6":
-        const threads = await api.getThreadList(100, null, ["INBOX"]);
-        if (!threads.length)
-          return api.sendMessage("البوت غير موجود في أي مجموعة حالياً.", event.threadID);
-
-        let msg = "قائمة القروبات:\n\n";
-        threads.forEach((t, i) => msg += `${i + 1}. ${t.name}\n`);
-        msg += "\nللإضافة: اكتب (اضف رقم)\nمثال: اضف 1";
-
-        api.sendMessage(msg, event.threadID, (err, info) => {
-          global.client.handleReply.push({
-            type: "addDev",
-            name: module.exports.config.name,
-            messageID: info.messageID,
-            author: event.senderID,
-            threads: threads
+        case "5":
+          api.getThreadList(50, null, ["INBOX"], (err, list) => {
+            let txt = "📋 المجموعات:\n";
+            list.filter(t => t.isGroup).forEach((t, i) => txt += `${i+1}- ${t.name}\n`);
+            api.sendMessage(txt, threadID);
           });
-        });
-        break;
-
-      default:
-        api.sendMessage("رقم غير صحيح. اختر من 1 إلى 6.", event.threadID);
-    }
-  }
-
-  // إرسال رسالة لجميع القروبات
-  if (handleReply.type === "sendWord") {
-    const allThread = await api.getThreadList(100, null, ["INBOX"]);
-    const now = new Date();
-    const options = { timeZone: "Africa/Khartoum", hour12: false };
-    const date = now.toLocaleDateString("ar-EG", options);
-    const time = now.toLocaleTimeString("ar-EG", options);
-
-    const message =
-`رسالة من المطور:
-
-${event.body}
-
-التاريخ: ${date}
-الوقت: ${time}`;
-
-    for (const t of allThread) {
-      api.sendMessage(message, t.threadID);
-    }
-
-    api.sendMessage("تم إرسال الرسالة لجميع القروبات بنجاح.", event.threadID);
-    global.client.handleReply = global.client.handleReply.filter(e => e.messageID !== handleReply.messageID);
-  }
-
-  // تغيير الكنيات
-  if (handleReply.type === "setNick") {
-    const newNick = event.body;
-    const threadInfo = await api.getThreadInfo(event.threadID);
-    let count = 0;
-    for (let user of threadInfo.userInfo) {
-      try {
-        const firstName = user.firstName || "عضو";
-        const nick = newNick.replace("الاسم", firstName);
-        await api.changeNickname(nick, event.threadID, user.id);
-        count++;
-      } catch (e) {}
-    }
-    api.sendMessage(`تم تحديث ${count} كنية بنجاح.`, event.threadID);
-  }
-
-  // حظر مستخدم
-  if (handleReply.type === "banUser" && event.messageReply) {
-    const uid = event.messageReply.senderID;
-    if (!bannedUsers.includes(uid)) bannedUsers.push(uid);
-    api.sendMessage(`تم حظر المستخدم ${uid} من استخدام البوت.`, event.threadID);
-  }
-
-  // إضافة المطور لمجموعة
-  if (handleReply.type === "addDev") {
-    if (!args[0].startsWith("اضف")) return;
-    const index = parseInt(args[1]) - 1;
-    if (isNaN(index) || index < 0 || index >= handleReply.threads.length)
-      return api.sendMessage("الرقم غير صحيح.", event.threadID);
-
-    const thread = handleReply.threads[index];
-    try {
-      await api.addUserToGroup(devID, thread.threadID);
-      api.sendMessage("تم دخول المطور بنجاح.", thread.threadID);
-      api.sendMessage(`تمت إضافة المطور لمجموعة: ${thread.name}`, event.threadID);
-    } catch (error) {
-      api.sendMessage(
-        `فشل في إضافة المطور لمجموعة: ${thread.name}\nتأكد أن البوت أدمن في المجموعة.`,
-        event.threadID
-      );
-    }
+          break;
+          
+        default:
+          if(choice) api.sendMessage("❌ خيار غير صحيح.", threadID);
+      }
+    }, messageID);
   }
 };
