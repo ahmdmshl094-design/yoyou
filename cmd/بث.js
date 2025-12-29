@@ -1,72 +1,56 @@
 const { styleText, styleNum } = require('../tools');
 const log = require('../logger');
+const { getUserRank } = require("../handlers/handleCmd");
 
 module.exports = {
   name: "بث",
-  otherName: ['sendall'],
-  rank: 2,
-  hide: true,
-  cooldown: 15,
-  description: 'إرسال بث إلى جميع المجموعات',
-  run: async (api, event, commands, args) => {
-    const startTime = Date.now();
-    const { threadID, messageID } = event;
-    const broadcastMessage = args.join(' ');
+  rank: 2, // للمطور فقط
+  cooldown: 10,
+  prefix: true,
+  description: "إرسال رسالة لجميع المجموعات (عضو أو مشرف)",
+  run: function (api, event, commands, args) {
+    const { threadID, messageID, senderID } = event;
 
-    if (!broadcastMessage) {
-      return api.sendMessage(
-        styleText('اكتب رسالة البث'),
-        threadID,
-        messageID
-      );
+    // التحقق من أنك المطور (Rank 2)
+    if (getUserRank(senderID) < 2) {
+      return api.sendMessage("| هذا الأمر مخصص للمطورين فقط.", threadID, messageID);
     }
 
-    try {
-      // جلب عدد أكبر من المحادثات
-      const threads = await api.getThreadList(1000, null, ['INBOX']);
-      const groupThreads = threads.filter(t => t.isGroup);
+    const broadcastMessage = args.join(' ');
+    if (!broadcastMessage) {
+      return api.sendMessage(styleText("يرجى كتابة نص الرسالة بعد كلمة بث"), threadID, messageID);
+    }
 
-      if (!groupThreads.length) {
-        return api.sendMessage(
-          'البوت غير موجود في أي مجموعة حالياً',
-          threadID,
-          messageID
-        );
+    // جلب المجموعات
+    api.getThreadList(400, null, ["INBOX"], (err, list) => {
+      if (err) return api.sendMessage("❌ خطأ في جلب القائمة.", threadID, messageID);
+
+      // تصفية المحادثات لتشمل المجموعات التي البوت عضو فيها فقط
+      const groupThreads = list.filter(t => t.isGroup && t.isSubscribed);
+
+      if (groupThreads.length === 0) {
+        return api.sendMessage("| لا توجد مجموعات نشطة حالياً.", threadID, messageID);
       }
+
+      api.sendMessage(`⏳ جاري بدء البث إلى ${styleNum(groupThreads.length)} مجموعة...\n(سيتم الإرسال سواء كنت مشرفاً أم لا)`, threadID);
 
       let successCount = 0;
-      let failedCount = 0;
+      let completed = 0;
 
-      for (const thread of groupThreads) {
-        try {
-          await api.sendMessage(
-            `رسالة من المطور:\n\n${broadcastMessage}`,
-            thread.threadID
-          );
-          successCount++;
-        } catch (err) {
-          failedCount++;
-        }
-      }
-
-      const durationSec = ((Date.now() - startTime) / 1000).toFixed(2);
-
-      const response =
-        `تم تنفيذ البث بنجاح\n\n` +
-        `عدد المجموعات: ${styleNum(groupThreads.length)}\n` +
-        `تم الإرسال: ${styleNum(successCount)}\n` +
-        `فشل الإرسال: ${styleNum(failedCount)}\n` +
-        `الوقت: ${styleNum(durationSec)} ثانية`;
-
-      api.sendMessage(response, threadID, messageID);
-
-    } catch (err) {
-      log.error("خطأ في أمر البث: " + err);
-      api.sendMessage(
-        'حدث خطأ أثناء تنفيذ أمر البث',
-        threadID,
-        messageID
-      );
-    }
+      groupThreads.forEach((group, index) => {
+        // توزيع الإرسال بفارق زمني (ثانية بين كل رسالة) لتجنب الحظر
+        setTimeout(() => {
+          api.sendMessage(`| إشعار من المطور:\n\n${broadcastMessage}`, group.threadID, (sendErr) => {
+            if (!sendErr) successCount++;
+            
+            completed++;
+            // عند الانتهاء من آخر مجموعة في القائمة
+            if (completed === groupThreads.length) {
+              api.sendMessage(`✅ تم اكتمال البث:\n• نجاح الإرسال لـ: ${styleNum(successCount)} مجموعة.`, threadID);
+            }
+          });
+        }, index * 1000); 
+      });
+    });
   }
 };
