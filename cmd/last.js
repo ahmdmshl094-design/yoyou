@@ -1,119 +1,65 @@
-// cmd/last.js
-const log = require('../logger');
-const config = require('../config.json');
+const { getUserRank } = require("../handlers/handleCmd");
 
-module.exports.config = {
-  name: "last",
-  version: '1.0.0',
-  credits: 'عمر',
-  hasPermssion: 2,
-  description: 'عرض المجموعات التي يتواجد بها البوت والتحكم بها',
-  commandCategory: 'المطور',
-  usages: 'last',
-  cooldowns: 15
-};
-
-module.exports.handleReply = async function({ api, event, Threads, handleReply }) {
-  const { senderID, threadID, messageID, body } = event;
-  
-  // التحقق من أن الشخص الذي يرد هو المطور الذي طلب القائمة
-  if (parseInt(senderID) !== parseInt(handleReply.author)) return;
-
-  const args = body.split(/\s+/);
-  const action = args[0]; // خروج أو حظر
-  const index = parseInt(args[1]) - 1; // تحويل الرقم المكتوب إلى ترتيب في المصفوفة
-  const targetID = handleReply.groupid[index];
-
-  if (!targetID) {
-    return api.sendMessage("⚠️ الرقم الذي اخترته غير موجود في القائمة.", threadID, messageID);
-  }
-
-  switch (handleReply.type) {
-    case "reply":
-      {
-        // خيار الحظر
-        if (action === "حظر") {
-          try {
-            if (Threads && Threads.setData) {
-              const threadData = (await Threads.getData(targetID)).data || {};
-              threadData.banned = 1;
-              await Threads.setData(targetID, { data: threadData });
-              
-              if (global.data && global.data.threadBanned) {
-                global.data.threadBanned.set(parseInt(targetID), 1);
-              }
-              api.sendMessage(`✅ تم حظر المجموعة بنجاح:\nID: ${targetID}`, threadID, messageID);
-            } else {
-              api.sendMessage("⚠️ نظام قاعدة بيانات المجموعات (Threads) غير متوفر حالياً.", threadID, messageID);
-            }
-          } catch (e) {
-            log.error(e);
-            api.sendMessage("❌ فشل تنفيذ عملية الحظر.", threadID, messageID);
-          }
-          break;
-        }
-
-        // خيار الخروج
-        if (action === "خروج" || action === "غادري") {
-          try {
-            api.removeUserFromGroup(api.getCurrentUserID(), targetID, (err) => {
-              if (err) return api.sendMessage(`❌ فشل الخروج من المجموعة: ${targetID}`, threadID, messageID);
-              api.sendMessage(`✅ تم الخروج من المجموعة بنجاح.`, threadID, messageID);
-            });
-          } catch (e) {
-            log.error(e);
-          }
-          break;
-        }
+module.exports = {
+  name: "لاست",
+  otherName: [],
+  rank: 2, // المطور فقط
+  cooldown: 15,
+  description: "عرض قائمة المجموعات المتواجد فيها البوت",
+  commandCategory: "المطور",
+  usages: "لاست",
+  run: async (api, event, commands, args, client) => {
+    try {
+      const senderID = event.senderID;
+      const userRank = getUserRank(senderID);
+      
+      // منع غير المطورين
+      if (userRank < 2) {
+        return api.sendMessage("مش لك مقلبي ☝🏿🐸", event.threadID, event.messageID);
       }
-  }
-};
 
-module.exports.run = async function({ api, event }) {
-  const { senderID, threadID, messageID } = event;
-  const devID = 61579001370029; // معرفك كمطور
+      // جلب آخر 100 محادثة
+      const inbox = await api.getThreadList(100, null, ["INBOX"]);
+      const list = inbox.filter(thread => thread.isGroup && thread.isSubscribed);
 
-  // التحقق من صلاحية المطور
-  if (parseInt(senderID) !== devID) {
-    return api.sendMessage("⚠️ هذا الأمر مخصص للمطور فقط.", threadID, messageID);
-  }
+      const listthread = [];
+      for (const groupInfo of list) {
+        const data = await api.getThreadInfo(groupInfo.threadID);
+        listthread.push({
+          id: groupInfo.threadID,
+          name: groupInfo.name,
+          sotv: data.userInfo.length,
+        });
+      }
 
-  try {
-    // جلب قائمة بآخر 100 محادثة
-    const inbox = await api.getThreadList(100, null, ['INBOX']);
-    // تصفية المجموعات النشطة فقط
-    const groups = inbox.filter(g => g.isGroup && g.isSubscribed);
+      // ترتيب حسب عدد الأعضاء
+      const sortedList = listthread.sort((a, b) => b.sotv - a.sotv);
 
-    if (groups.length === 0) {
-      return api.sendMessage("📩 البوت لا يتواجد في أي مجموعات حالياً.", threadID, messageID);
-    }
-
-    const groupid = [];
-    let msg = "╭──〔 قائمة المجموعات 〕───\n│\n";
-    
-    groups.forEach((group, i) => {
-      msg += `│ ${i + 1}. ${group.name || "مجموعة بدون اسم"}\n│ ID: ${group.threadID}\n│ 👥 الأعضاء: ${group.participantIDs.length}\n│\n`;
-      groupid.push(group.threadID);
-    });
-
-    msg += `╰───〔 انتهى 〕───\n\n💡 للتحكم، رد على الرسالة بـ:\n(خروج [رقم]) أو (حظر [رقم])`;
-
-    return api.sendMessage(msg, threadID, (err, info) => {
-      if (err) return log.error(err);
-      
-      if (!global.client.handleReply) global.client.handleReply = [];
-      
-      global.client.handleReply.push({
-        name: this.config.name,
-        author: senderID,
-        messageID: info.messageID,
-        groupid: groupid,
-        type: 'reply'
+      // إعداد رسالة المجموعات
+      let msg = "╭──〔 قائمة المجموعات 〕───\n";
+      let groupid = [];
+      sortedList.forEach((group, index) => {
+        msg += `│\n│ ${index + 1}. ${group.name}\n│ ID: ${group.id}\n│ الأعضاء: ${group.sotv}\n`;
+        groupid.push(group.id);
       });
-    }, messageID);
+      msg += "│\n╰───〔 انتهى 〕───\n\nرد بـ 'خروج رقم' أو 'حظر رقم' للتنفيذ";
 
-  } catch (error) {
-    log.error(error);
-    return api.sendMessage("❌ حدث خطأ أثناء جلب القائمة.", threadID, messageID);
-  }
+      // حفظ handleReply للرد
+      if (!global.client) global.client = {};
+      if (!global.client.handleReply) global.client.handleReply = [];
+      api.sendMessage(msg, event.threadID, (err, info) => {
+        global.client.handleReply.push({
+          name: module.exports.name,
+          author: senderID,
+          messageID: info.messageID,
+          groupid,
+          type: "reply",
+        });
+      });
+
+    } catch (e) {
+      console.error("Error in command 'لاست':", e);
+      api.sendMessage("حدث خطأ أثناء تنفيذ الأمر.", event.threadID, event.messageID);
+    }
+  },
 };
