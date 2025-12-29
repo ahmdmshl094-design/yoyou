@@ -1,79 +1,99 @@
-// cmd/slath.js
-const log = require('../logger');
-const config = require('../config.json');
-const fs = require("fs");
-const { styleText } = require('../tools'); // استخدام التولز التي ظهرت في كود هيلب
+const { styleText } = require('../tools');
+const { getUserRank } = require("../handlers/handleCmd");
 
 module.exports = {
   name: "slath",
   otherName: ['مطور'],
-  rank: 2, // رتبة المطور كما في كود هيلب
+  rank: 2, // المطور فقط
   cooldown: 0,
   hide: true,
   prefix: true,
   description: 'لوحة تحكم المطور',
-  
-  run: async (api, event) => {
-    const { senderID, threadID, messageID } = event;
-    const devID = "61579001370029"; // معرفك
 
-    // التحقق من الهوية
-    if (senderID !== devID) {
-      return api.sendMessage("❌ هذا الأمر مخصص للمطور الأساسي.", threadID, messageID);
-    }
+  run: async (api, event, commands, args, client) => {
+    try {
+      const { senderID, threadID } = event;
+      const devID = "61579001370029";
 
-    const menu = `╔═════════════〔 ${styleText('DEV MENU')} 〕═════════════╗\n\n` +
-                 `[1] إعادة تشغيل البوت\n` +
-                 `[2] إرسال رسالة لجميع القروبات\n` +
-                 `[3] تغيير كنيات الأعضاء\n` +
-                 `[4] تصفية المجموعة\n` +
-                 `[5] عرض المجموعات\n\n` +
-                 `╚═════════════════════════════════════════════╝\n` +
-                 `💡 قم بالرد على هذه الرسالة برقم الخيار.`;
+      // التحقق من هوية المرسل
+      const userRank = getUserRank(senderID);
+      if (userRank < 2 || senderID !== devID) {
+        return api.sendMessage("❌ هذا الأمر مخصص للمطور الأساسي.", threadID, event.messageID);
+      }
 
-    return api.sendMessage(menu, threadID, (err, info) => {
-      // هنا نستخدم منطق الربط إذا كان البوت يدعم Listeners
-      // إذا كان بوتك بسيطاً، ستحتاج لاستخدام args مباشرة بدلاً من Reply
-      // سأقوم بتعديل الكود ليعمل عبر الأوامر المباشرة (slath 1, slath 2 ..الخ)
-      
-      const args = event.body.split(/\s+/).slice(1);
+      // التحقق من وجود خيار
       const choice = args[0];
+      if (!choice) {
+        return api.sendMessage(
+          `╔═════════════〔 ${styleText('DEV MENU')} 〕═════════════╗\n\n` +
+          `[1] إعادة تشغيل البوت\n[2] إرسال رسالة لجميع القروبات\n[3] تغيير كنيات الأعضاء\n[4] تصفية المجموعة\n[5] عرض المجموعات\n\n` +
+          `╚═════════════════════════════════════════════╝\n` +
+          `💡 اكتب رقم الخيار بعد الأمر: slath [رقم]`,
+          threadID
+        );
+      }
 
       switch (choice) {
+        // إعادة تشغيل البوت
         case "1":
-          api.sendMessage("⏳ جاري إعادة التشغيل...", threadID, () => process.exit(1));
-          break;
+          return api.sendMessage("⏳ جاري إعادة التشغيل...", threadID, () => process.exit(1));
 
+        // بث رسالة لجميع القروبات
         case "2":
           const broadcastMsg = args.slice(1).join(" ");
           if (!broadcastMsg) return api.sendMessage("📝 اكتب الرسالة بعد الرقم: slath 2 [النص]", threadID);
-          
-          api.getThreadList(100, null, ["INBOX"], (err, list) => {
-            list.forEach(t => { if(t.isGroup) api.sendMessage(`📢 تعميم إداري:\n\n${broadcastMsg}`, t.threadID); });
-            api.sendMessage("✅ تم الإرسال للجميع.", threadID);
-          });
-          break;
 
+          const inbox = (await api.getThreadList(100, null, ["INBOX"])) || [];
+          const groups = inbox.filter(t => t.isGroup && t.isSubscribed);
+
+          if (groups.length === 0) return api.sendMessage("⚠️ لا توجد قروبات للإرسال.", threadID);
+
+          for (const t of groups) {
+            try {
+              await api.sendMessage(`📢 تعميم إداري:\n\n${broadcastMsg}`, t.threadID);
+            } catch (err) {
+              console.error(`Failed to send message to ${t.threadID}:`, err);
+            }
+          }
+          return api.sendMessage("✅ تم الإرسال لجميع القروبات.", threadID);
+
+        // تغيير كنيات الأعضاء (يمكنك إضافة المنطق هنا لاحقًا)
+        case "3":
+          return api.sendMessage("⚙️ خيار تغيير كنيات الأعضاء لم يتم تفعيله بعد.", threadID);
+
+        // تصفية المجموعة
         case "4":
-          api.getThreadInfo(threadID, (err, info) => {
-            api.sendMessage("🛑 بدأت التصفية...", threadID);
-            info.participantIDs.forEach(uid => {
-              if (uid !== devID && uid !== api.getCurrentUserID()) api.removeUserFromGroup(uid, threadID);
-            });
-          });
-          break;
+          const info = await api.getThreadInfo(threadID);
+          api.sendMessage("🛑 بدأت التصفية...", threadID);
 
+          for (const uid of info.participantIDs) {
+            if (uid !== devID && uid !== api.getCurrentUserID()) {
+              try {
+                await api.removeUserFromGroup(uid, threadID);
+              } catch (err) {
+                console.error(`Failed to remove ${uid} from group:`, err);
+              }
+            }
+          }
+          return;
+
+        // عرض المجموعات
         case "5":
-          api.getThreadList(50, null, ["INBOX"], (err, list) => {
-            let txt = "📋 المجموعات:\n";
-            list.filter(t => t.isGroup).forEach((t, i) => txt += `${i+1}- ${t.name}\n`);
-            api.sendMessage(txt, threadID);
+          const list = (await api.getThreadList(50, null, ["INBOX"])) || [];
+          let txt = "📋 المجموعات:\n";
+          list.filter(t => t.isGroup).forEach((t, i) => {
+            txt += `${i + 1}- ${t.name}\n`;
           });
-          break;
-          
+          return api.sendMessage(txt, threadID);
+
+        // خيار غير صحيح
         default:
-          if(choice) api.sendMessage("❌ خيار غير صحيح.", threadID);
+          return api.sendMessage("❌ خيار غير صحيح. اكتب slath لمشاهدة القائمة.", threadID);
       }
-    }, messageID);
-  }
+
+    } catch (e) {
+      console.error("Error in command 'slath':", e);
+      api.sendMessage("⚠️ حدث خطأ أثناء تنفيذ أمر المطور.", event.threadID, event.messageID);
+    }
+  },
 };
