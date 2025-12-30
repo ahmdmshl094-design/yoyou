@@ -1,7 +1,7 @@
 
 {
-  "name": "|  ᏞᏆꞌ𝇙𝚄𝚇  𝝯𝟮",
-  "nameAr": "لينكس",
+  "name": "هياتو",
+  "nameAr": "هياتو",
   "prefix": "",
   "EVE": false,
   "AI": false,
@@ -17,7 +17,7 @@
   ],
   "email": "",
   "password": "",
-  "mongoURI": "mongodb+srv://ahmedaltwm555_db_user:PaslZZmgX7VXRzlw@ber1.jn7kisv.mongodb.net/?appName=ber1",
+  "mongoURI": "mongodb+srv://ahmedaltwm555_db_user:bJd0T7XxxSyaDORs@cluster0.aw2tr71.mongodb.net/?appName=Cluster0",
   "Villages": [],
   "REPLICATE_API_TOKEN": "r8_OGSe3t07ORJtSgaSyzP5Mfbcv00lNpl2Mugh6",
   "ai_keys": [
